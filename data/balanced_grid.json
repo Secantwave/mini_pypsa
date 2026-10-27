@@ -1,0 +1,30 @@
+{
+  "name": "Balanced Campus Grid",
+  "description": "Generation comfortably meets total load with merit-order dispatch and normal line loading.",
+  "buses": [
+    {"name": "Bus1", "voltage": 11, "x": 0.0, "y": 1.0},
+    {"name": "Bus2", "voltage": 11, "x": 2.0, "y": 1.0},
+    {"name": "Bus3", "voltage": 11, "x": 1.0, "y": 0.0},
+    {"name": "Bus4", "voltage": 11, "x": 2.0, "y": 0.0}
+  ],
+  "generators": [
+    {"name": "Solar_Farm", "bus": "Bus1", "capacity": 80, "marginal_cost": 0},
+    {"name": "Wind_Turbine", "bus": "Bus2", "capacity": 60, "marginal_cost": 2},
+    {"name": "Hydro_Plant", "bus": "Bus3", "capacity": 70, "marginal_cost": 5},
+    {"name": "Gas_Turbine", "bus": "Bus4", "capacity": 50, "marginal_cost": 9}
+  ],
+  "loads": [
+    {"name": "City_Center", "bus": "Bus2", "demand": 70},
+    {"name": "Industrial_Zone", "bus": "Bus3", "demand": 50},
+    {"name": "University", "bus": "Bus4", "demand": 40}
+  ],
+  "lines": [
+    {"name": "L1", "from_bus": "Bus1", "to_bus": "Bus2", "capacity": 100},
+    {"name": "L2", "from_bus": "Bus1", "to_bus": "Bus3", "capacity": 90},
+    {"name": "L3", "from_bus": "Bus2", "to_bus": "Bus4", "capacity": 80},
+    {"name": "L4", "from_bus": "Bus3", "to_bus": "Bus4", "capacity": 80}
+  ],
+  "storage": [
+    {"name": "Grid_Battery", "bus": "Bus4", "capacity": 60, "max_power": 30, "initial_energy": 25}
+  ]
+}

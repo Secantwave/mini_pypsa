@@ -1,58 +1,78 @@
-from components import Bus, Generator, Load, Storage, TransmissionLine
+from dataclasses import dataclass, field
 
 
+@dataclass
 class Network:
-    """Stores the objects that make up a virtual power grid."""
+    """Container for the complete simplified power-system model."""
 
-    def __init__(self, name: str = "Demo Grid"):
-        self.name = name
-        self.buses: list[Bus] = []
-        self.generators: list[Generator] = []
-        self.loads: list[Load] = []
-        self.lines: list[TransmissionLine] = []
-        self.storage_units: list[Storage] = []
+    name: str
+    buses: list = field(default_factory=list)
+    generators: list = field(default_factory=list)
+    loads: list = field(default_factory=list)
+    lines: list = field(default_factory=list)
+    storage_units: list = field(default_factory=list)
 
-    @property
-    def components(self):
-        return self.buses + self.generators + self.loads + self.lines + self.storage_units
+    def add_bus(self, bus) -> None:
+        self.buses.append(bus)
 
-    def _add_unique(self, items, item):
-        if any(existing.name == item.name for existing in self.components):
-            raise ValueError(f"Component name already exists: {item.name}")
-        items.append(item)
-        return item
+    def add_generator(self, generator) -> None:
+        self.generators.append(generator)
+        generator.bus.connect(generator)
 
-    def add_bus(self, bus: Bus):
-        return self._add_unique(self.buses, bus)
+    def add_load(self, load) -> None:
+        self.loads.append(load)
+        load.bus.connect(load)
 
-    def add_generator(self, generator: Generator):
-        return self._add_unique(self.generators, generator)
+    def add_line(self, line) -> None:
+        self.lines.append(line)
+        line.from_bus.connect(line)
+        line.to_bus.connect(line)
 
-    def add_load(self, load: Load):
-        return self._add_unique(self.loads, load)
+    def add_storage(self, storage) -> None:
+        self.storage_units.append(storage)
+        storage.bus.connect(storage)
 
-    def add_line(self, line: TransmissionLine):
-        return self._add_unique(self.lines, line)
+    def total_generation(self) -> float:
+        return sum(g.output for g in self.generators)
 
-    def add_storage(self, storage: Storage):
-        return self._add_unique(self.storage_units, storage)
+    def total_demand(self) -> float:
+        return sum(load.demand for load in self.loads)
 
-    def get_bus(self, name: str) -> Bus:
-        for bus in self.buses:
-            if bus.name == name:
-                return bus
-        raise KeyError(f"Unknown bus: {name}")
+    def total_storage_discharge_available(self) -> float:
+        return sum(
+            min(storage.energy, storage.max_power)
+            for storage in self.storage_units
+        )
 
-    def validate(self) -> list[str]:
-        errors = []
-        bus_names = {bus.name for bus in self.buses}
-        for component in self.components:
-            if not component.validate():
-                errors.append(f"Invalid values in {component.name}")
-        for component in self.generators + self.loads + self.storage_units:
-            if component.bus not in bus_names:
-                errors.append(f"{component.name} is connected to missing bus '{component.bus}'")
+    def power_balance(self) -> float:
+        return self.total_generation() - self.total_demand()
+
+    def total_cost(self) -> float:
+        return sum(g.calculate_cost() for g in self.generators)
+
+    def reset_flows(self) -> None:
         for line in self.lines:
-            if line.from_bus not in bus_names or line.to_bus not in bus_names:
-                errors.append(f"{line.name} refers to a missing bus")
-        return errors
+            line.set_flow(0.0)
+
+    def summary(self) -> str:
+        balance = self.power_balance()
+        status = (
+            "BALANCED"
+            if abs(balance) < 1e-9
+            else "SURPLUS"
+            if balance > 0
+            else "DEFICIT"
+        )
+
+        return (
+            f"\n===== {self.name} =====\n"
+            f"Buses       : {len(self.buses)}\n"
+            f"Generators  : {len(self.generators)}\n"
+            f"Loads       : {len(self.loads)}\n"
+            f"Lines       : {len(self.lines)}\n"
+            f"Storage     : {len(self.storage_units)}\n"
+            f"Generation  : {self.total_generation():.2f} MW\n"
+            f"Demand      : {self.total_demand():.2f} MW\n"
+            f"Balance     : {balance:.2f} MW ({status})\n"
+            f"Cost        : ₹{self.total_cost():.2f}/h\n"
+        )

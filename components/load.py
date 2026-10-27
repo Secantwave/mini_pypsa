@@ -2,17 +2,24 @@ from .component import Component
 
 
 class Load(Component):
-    """An electricity consumer connected to a bus."""
+    """Electrical demand connected to a bus."""
 
-    def __init__(self, name: str, bus: str, demand_mw: float):
+    def __init__(self, name: str, bus, demand: float):
         super().__init__(name)
+        if demand < 0:
+            raise ValueError("Demand cannot be negative.")
+
         self.bus = bus
-        self.demand_mw = float(demand_mw)
+        self.demand = float(demand)
 
-    def set_demand(self, demand_mw: float) -> None:
-        if demand_mw < 0:
-            raise ValueError("Demand cannot be negative")
-        self.demand_mw = float(demand_mw)
+    def get_demand(self) -> float:
+        return self.demand
 
-    def validate(self) -> bool:
-        return self.demand_mw >= 0
+    def set_demand(self, demand: float) -> None:
+        demand = float(demand)
+        if demand < 0:
+            raise ValueError("Demand cannot be negative.")
+        self.demand = demand
+
+    def info(self) -> str:
+        return f"Load {self.name}: {self.demand:g} MW"

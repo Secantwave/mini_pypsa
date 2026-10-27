@@ -1,123 +1,199 @@
-import networkx as nx
+from collections import defaultdict, deque
 
 
 class PowerFlowSolver:
-    """A simplified, shortest-path dispatch model for classroom demonstration.
+    """
+    Simplified analysis engine.
 
-    It does not solve AC power-flow equations or enforce line limits while dispatching.
-    It estimates flows from generator/load allocations and reports overloaded lines.
+    This is NOT a full AC load-flow solver. It performs:
+    - merit-order generator dispatch
+    - optional battery discharge for deficits
+    - simple radial-style flow allocation
+    - line-capacity checking
     """
 
     def __init__(self, network):
         self.network = network
+        self.unserved_demand = 0.0
+        self.storage_discharge = 0.0
+        self.dispatch = {}
 
-    def _bus_graph(self):
-        graph = nx.Graph()
-        graph.add_nodes_from(bus.name for bus in self.network.buses)
-        for line in self.network.lines:
-            graph.add_edge(line.from_bus, line.to_bus, line=line)
-        return graph
+    def reset(self) -> None:
+        self.unserved_demand = 0.0
+        self.storage_discharge = 0.0
+        self.dispatch = {}
+        self.network.reset_flows()
 
-    def _add_path_flow(self, path, power_mw):
-        for start, end in zip(path, path[1:]):
-            line = self._line_between(start, end)
-            if line is None:
-                continue
-            if line.from_bus == start and line.to_bus == end:
-                line.flow_mw += power_mw
-            else:
-                line.flow_mw -= power_mw
+    def dispatch_generators(self) -> float:
+        """Dispatch generators from cheapest to most expensive."""
+        self.reset()
 
-    def _line_between(self, bus_a, bus_b):
-        for line in self.network.lines:
-            if {line.from_bus, line.to_bus} == {bus_a, bus_b}:
-                return line
-        return None
+        demand = self.network.total_demand()
 
-    def solve(self, hours=1.0):
-        if hours <= 0:
-            raise ValueError("hours must be greater than zero")
-        errors = self.network.validate()
-        if errors:
-            raise ValueError("Network has invalid configuration: " + "; ".join(errors))
+        for generator in sorted(
+            self.network.generators,
+            key=lambda g: g.marginal_cost
+        ):
+            output = min(generator.capacity, demand)
+            generator.generate(output)
+            demand -= output
+            self.dispatch[generator.name] = output
 
-        for line in self.network.lines:
-            line.flow_mw = 0.0
-        for generator in self.network.generators:
-            generator.output_mw = 0.0
-        for battery in self.network.storage_units:
-            battery.last_discharge_mw = 0.0
-            battery.last_charge_mw = 0.0
-
-        graph = self._bus_graph()
-        generators = sorted(self.network.generators, key=lambda item: item.marginal_cost)
-        batteries = list(self.network.storage_units)
-        served_by_load = {}
-        unserved_by_load = {}
-
-        for load in self.network.loads:
-            remaining = load.demand_mw
-
-            for generator in generators:
-                available = generator.capacity_mw - generator.output_mw
-                if available <= 1e-9 or remaining <= 1e-9:
-                    continue
-                if generator.bus not in graph or load.bus not in graph:
-                    continue
-                try:
-                    path = nx.shortest_path(graph, generator.bus, load.bus)
-                except nx.NetworkXNoPath:
-                    continue
-                supplied = min(remaining, available)
-                generator.generate(generator.output_mw + supplied)
-                self._add_path_flow(path, supplied)
-                remaining -= supplied
-
-            for battery in batteries:
-                if remaining <= 1e-9:
+        # Use storage if there is still a deficit.
+        if demand > 1e-9:
+            for storage in self.network.storage_units:
+                supplied = storage.discharge(demand)
+                self.storage_discharge += supplied
+                demand -= supplied
+                if demand <= 1e-9:
                     break
-                if battery.bus not in graph or load.bus not in graph:
-                    continue
-                try:
-                    path = nx.shortest_path(graph, battery.bus, load.bus)
-                except nx.NetworkXNoPath:
-                    continue
-                supplied = battery.discharge(min(remaining, battery.max_power_mw), hours)
-                if supplied > 0:
-                    self._add_path_flow(path, supplied)
-                    remaining -= supplied
 
-            served_by_load[load.name] = load.demand_mw - remaining
-            unserved_by_load[load.name] = max(0.0, remaining)
+        # If there is still a deficit, record it.
+        self.unserved_demand = max(0.0, demand)
 
-        total_demand = sum(load.demand_mw for load in self.network.loads)
-        total_generation = sum(generator.output_mw for generator in self.network.generators)
-        storage_discharge = sum(battery.last_discharge_mw for battery in batteries)
-        total_supply = total_generation + storage_discharge
-        unserved = sum(unserved_by_load.values())
-        total_cost = sum(generator.calculate_cost() for generator in self.network.generators)
+        return self.unserved_demand
 
-        warnings = []
-        if unserved > 1e-6:
-            warnings.append(f"Power shortage: {unserved:.1f} MW of demand could not be served.")
-        for line in self.network.lines:
-            if line.is_overloaded:
-                warnings.append(
-                    f"{line.name} is overloaded ({abs(line.flow_mw):.1f} MW / {line.capacity_mw:.1f} MW)."
-                )
-        if not warnings:
-            warnings.append("No shortage or line overload detected in this simplified model.")
+    def check_power_balance(self) -> dict:
+        generation = self.network.total_generation()
+        demand = self.network.total_demand()
+        storage = self.storage_discharge
+        served = generation + storage
 
         return {
-            "total_demand_mw": total_demand,
-            "total_generation_mw": total_generation,
-            "storage_discharge_mw": storage_discharge,
-            "total_supply_mw": total_supply,
-            "unserved_demand_mw": unserved,
-            "balance_mw": total_supply - total_demand,
-            "operating_cost": total_cost,
-            "served_by_load": served_by_load,
-            "unserved_by_load": unserved_by_load,
-            "warnings": warnings,
-            "hours": hours,
+            "generation": generation,
+            "demand": demand,
+            "storage": storage,
+            "served": served,
+            "balance": served - demand,
+            "unserved": max(0.0, demand - served),
         }
+
+    def _make_graph(self):
+        """Build a NetworkX graph when available."""
+        try:
+            import networkx as nx
+        except ImportError as exc:
+            raise ImportError(
+                "NetworkX is required for line-flow analysis and visualization."
+            ) from exc
+
+        graph = nx.Graph()
+
+        for bus in self.network.buses:
+            graph.add_node(bus.name, bus=bus)
+
+        for line in self.network.lines:
+            graph.add_edge(
+                line.from_bus.name,
+                line.to_bus.name,
+                line=line,
+                capacity=line.capacity,
+            )
+
+        return graph
+
+    def calculate_simplified_flows(self) -> None:
+        """
+        Allocate power using a simple shortest-path model.
+
+        Each load is supplied from the nearest generator bus in the graph.
+        If multiple paths exist, the shortest path is selected.
+        This is intentionally an educational simplification.
+        """
+        self.network.reset_flows()
+
+        if not self.network.lines:
+            return
+
+        graph = self._make_graph()
+        line_by_edge = {}
+
+        for line in self.network.lines:
+            line_by_edge[frozenset((line.from_bus.name, line.to_bus.name))] = line
+
+        # Available generation after dispatch.
+        generator_by_bus = defaultdict(float)
+        for generator in self.network.generators:
+            generator_by_bus[generator.bus.name] += generator.output
+
+        # Treat battery discharge as local supply at its bus.
+        for storage in self.network.storage_units:
+            # Energy remaining after discharge is already updated, so the
+            # discharged quantity is represented through the aggregate amount.
+            pass
+
+        # For this simplified model, route each load from the nearest
+        # bus with positive generator output.
+        source_buses = [
+            bus_name
+            for bus_name, amount in generator_by_bus.items()
+            if amount > 1e-9
+        ]
+
+        if not source_buses:
+            return
+
+        for load in self.network.loads:
+            try:
+                distances = {
+                    source: nx_shortest_path_length(graph, source, load.bus.name)
+                    for source in source_buses
+                }
+            except Exception:
+                continue
+
+            source = min(distances, key=distances.get)
+
+            try:
+                path = shortest_path(graph, source, load.bus.name)
+            except Exception:
+                continue
+
+            remaining = load.demand
+
+            for start, end in zip(path[:-1], path[1:]):
+                line = line_by_edge.get(frozenset((start, end)))
+                if line is None:
+                    continue
+
+                sign = 1 if (
+                    line.from_bus.name == start
+                    and line.to_bus.name == end
+                ) else -1
+
+                line.set_flow(line.flow + sign * remaining)
+
+    def check_lines(self) -> list:
+        return [
+            {
+                "name": line.name,
+                "flow": line.flow,
+                "capacity": line.capacity,
+                "loading_percent": line.loading_percent(),
+                "status": "NORMAL" if line.check_capacity() else "OVERLOADED",
+            }
+            for line in self.network.lines
+        ]
+
+    def solve(self) -> dict:
+        self.dispatch_generators()
+        self.calculate_simplified_flows()
+
+        return {
+            "balance": self.check_power_balance(),
+            "lines": self.check_lines(),
+            "dispatch": dict(self.dispatch),
+            "cost": self.network.total_cost(),
+        }
+
+
+# Small wrappers keep the algorithm readable without requiring NetworkX in
+# every function signature.
+def nx_shortest_path_length(graph, source, target):
+    import networkx as nx
+    return nx.shortest_path_length(graph, source, target)
+
+
+def shortest_path(graph, source, target):
+    import networkx as nx
+    return nx.shortest_path(graph, source, target)

@@ -1,3 +1,3 @@
-from .plots import make_dispatch_figure, make_line_loading_figure, make_network_figure
+from .plots import plot_network
 
-__all__ = ["make_network_figure", "make_dispatch_figure", "make_line_loading_figure"]
+__all__ = ["plot_network"]

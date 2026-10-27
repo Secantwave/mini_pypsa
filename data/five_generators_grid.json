@@ -1,0 +1,34 @@
+{
+  "name": "5-Generator Diverse Energy Grid",
+  "description": "5 diverse generators with merit-order dispatch across 5 buses showing economic dispatch with battery support.",
+  "buses": [
+    {"name": "B1_SolarValley", "voltage": 11, "x": 0.0, "y": 2.0},
+    {"name": "B2_WindRidge", "voltage": 11, "x": 2.0, "y": 2.0},
+    {"name": "B3_HydroDam", "voltage": 11, "x": 1.0, "y": 1.0},
+    {"name": "B4_MetroHub", "voltage": 11, "x": 0.0, "y": 0.0},
+    {"name": "B5_IndustrialPark", "voltage": 11, "x": 2.0, "y": 0.0}
+  ],
+  "generators": [
+    {"name": "Solar_PV", "bus": "B1_SolarValley", "capacity": 70, "marginal_cost": 0},
+    {"name": "Wind_Offshore", "bus": "B2_WindRidge", "capacity": 50, "marginal_cost": 2},
+    {"name": "Hydro_Station", "bus": "B3_HydroDam", "capacity": 60, "marginal_cost": 4},
+    {"name": "Biomass_Plant", "bus": "B4_MetroHub", "capacity": 40, "marginal_cost": 7},
+    {"name": "Gas_Peaker", "bus": "B5_IndustrialPark", "capacity": 50, "marginal_cost": 11}
+  ],
+  "loads": [
+    {"name": "Metro_Demand", "bus": "B4_MetroHub", "demand": 85},
+    {"name": "Factory_Loads", "bus": "B5_IndustrialPark", "demand": 95},
+    {"name": "Residential_Town", "bus": "B3_HydroDam", "demand": 30}
+  ],
+  "lines": [
+    {"name": "Line_1_2", "from_bus": "B1_SolarValley", "to_bus": "B2_WindRidge", "capacity": 70},
+    {"name": "Line_1_3", "from_bus": "B1_SolarValley", "to_bus": "B3_HydroDam", "capacity": 80},
+    {"name": "Line_2_3", "from_bus": "B2_WindRidge", "to_bus": "B3_HydroDam", "capacity": 80},
+    {"name": "Line_3_4", "from_bus": "B3_HydroDam", "to_bus": "B4_MetroHub", "capacity": 90},
+    {"name": "Line_3_5", "from_bus": "B3_HydroDam", "to_bus": "B5_IndustrialPark", "capacity": 90},
+    {"name": "Line_4_5", "from_bus": "B4_MetroHub", "to_bus": "B5_IndustrialPark", "capacity": 60}
+  ],
+  "storage": [
+    {"name": "Central_BESS", "bus": "B3_HydroDam", "capacity": 80, "max_power": 30, "initial_energy": 40}
+  ]
+}

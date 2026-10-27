@@ -2,24 +2,37 @@ from .component import Component
 
 
 class TransmissionLine(Component):
-    """A line between two buses. Flow sign follows from_bus -> to_bus."""
+    """Connection between two buses with a simplified power-flow limit."""
 
-    def __init__(self, name: str, from_bus: str, to_bus: str, capacity_mw: float):
+    def __init__(
+        self,
+        name: str,
+        from_bus,
+        to_bus,
+        capacity: float,
+    ):
         super().__init__(name)
+        if capacity <= 0:
+            raise ValueError("Line capacity must be greater than zero.")
+
         self.from_bus = from_bus
         self.to_bus = to_bus
-        self.capacity_mw = float(capacity_mw)
-        self.flow_mw = 0.0
+        self.capacity = float(capacity)
+        self.flow = 0.0
 
-    @property
+    def set_flow(self, flow: float) -> None:
+        self.flow = float(flow)
+
+    def check_capacity(self) -> bool:
+        return abs(self.flow) <= self.capacity + 1e-9
+
     def loading_percent(self) -> float:
-        if self.capacity_mw <= 0:
-            return 0.0
-        return abs(self.flow_mw) / self.capacity_mw * 100
+        return abs(self.flow) / self.capacity * 100.0
 
-    @property
-    def is_overloaded(self) -> bool:
-        return abs(self.flow_mw) > self.capacity_mw + 1e-9
-
-    def validate(self) -> bool:
-        return self.capacity_mw > 0 and self.from_bus != self.to_bus
+    def info(self) -> str:
+        status = "NORMAL" if self.check_capacity() else "OVERLOADED"
+        return (
+            f"Line {self.name}: "
+            f"{self.flow:g}/{self.capacity:g} MW, "
+            f"{self.loading_percent():.1f}% - {status}"
+        )

@@ -1,0 +1,25 @@
+{
+  "name": "Line Overload Scenario",
+  "description": "Cheap solar and wind must transmit huge power across a bottleneck line, causing line overload (>100%).",
+  "buses": [
+    {"name": "Bus1", "voltage": 11, "x": 0.0, "y": 1.0},
+    {"name": "Bus2", "voltage": 11, "x": 2.0, "y": 1.0},
+    {"name": "Bus3", "voltage": 11, "x": 0.0, "y": 0.0},
+    {"name": "Bus4", "voltage": 11, "x": 2.0, "y": 0.0}
+  ],
+  "generators": [
+    {"name": "Mega_Solar", "bus": "Bus1", "capacity": 150, "marginal_cost": 0},
+    {"name": "Wind_Park", "bus": "Bus1", "capacity": 60, "marginal_cost": 2},
+    {"name": "Peaker_Gas", "bus": "Bus4", "capacity": 40, "marginal_cost": 15}
+  ],
+  "loads": [
+    {"name": "Steel_Mill", "bus": "Bus2", "demand": 120},
+    {"name": "Residential_Town", "bus": "Bus4", "demand": 40}
+  ],
+  "lines": [
+    {"name": "Bottleneck_L1", "from_bus": "Bus1", "to_bus": "Bus2", "capacity": 60},
+    {"name": "Tie_Line_L2", "from_bus": "Bus1", "to_bus": "Bus3", "capacity": 80},
+    {"name": "Inter_L3", "from_bus": "Bus3", "to_bus": "Bus4", "capacity": 70}
+  ],
+  "storage": []
+}

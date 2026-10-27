@@ -2,37 +2,53 @@ from .component import Component
 
 
 class Storage(Component):
-    """A simple battery model. The simulation interval is measured in hours."""
+    """Simplified battery model."""
 
-    def __init__(self, name: str, bus: str, capacity_mwh: float, max_power_mw: float, energy_mwh: float):
+    def __init__(
+        self,
+        name: str,
+        bus,
+        capacity: float,
+        max_power: float,
+        initial_energy: float = 0.0,
+    ):
         super().__init__(name)
+
+        if capacity <= 0:
+            raise ValueError("Storage capacity must be greater than zero.")
+        if max_power <= 0:
+            raise ValueError("Storage max_power must be greater than zero.")
+        if not 0 <= initial_energy <= capacity:
+            raise ValueError("Initial energy must lie between 0 and capacity.")
+
         self.bus = bus
-        self.capacity_mwh = float(capacity_mwh)
-        self.max_power_mw = float(max_power_mw)
-        self.energy_mwh = float(energy_mwh)
-        self.last_discharge_mw = 0.0
-        self.last_charge_mw = 0.0
+        self.capacity = float(capacity)
+        self.max_power = float(max_power)
+        self.energy = float(initial_energy)
 
-    def discharge(self, power_mw: float, hours: float = 1.0) -> float:
-        if hours <= 0:
-            raise ValueError("hours must be greater than zero")
-        power = min(max(0.0, power_mw), self.max_power_mw, self.energy_mwh / hours)
-        self.energy_mwh -= power * hours
-        self.last_discharge_mw += power
-        return power
+    def charge(self, power: float) -> float:
+        """Charge and return the actual power stored."""
+        power = float(power)
+        if power < 0:
+            raise ValueError("Charging power cannot be negative.")
 
-    def charge(self, power_mw: float, hours: float = 1.0) -> float:
-        if hours <= 0:
-            raise ValueError("hours must be greater than zero")
-        room = max(0.0, self.capacity_mwh - self.energy_mwh)
-        power = min(max(0.0, power_mw), self.max_power_mw, room / hours)
-        self.energy_mwh += power * hours
-        self.last_charge_mw += power
-        return power
+        actual = min(power, self.max_power, self.capacity - self.energy)
+        self.energy += actual
+        return actual
 
-    def validate(self) -> bool:
-        return (
-            self.capacity_mwh >= 0
-            and self.max_power_mw >= 0
-            and -1e-9 <= self.energy_mwh <= self.capacity_mwh + 1e-9
-        )
+    def discharge(self, power: float) -> float:
+        """Discharge and return the actual power supplied."""
+        power = float(power)
+        if power < 0:
+            raise ValueError("Discharge power cannot be negative.")
+
+        actual = min(power, self.max_power, self.energy)
+        self.energy -= actual
+        return actual
+
+    def info(self) -> str:
+        return f"Storage {self.name}: {self.energy:g}/{self.capacity:g} MWh"
+
+    @property
+    def state_of_charge(self) -> float:
+        return self.energy / self.capacity * 100.0

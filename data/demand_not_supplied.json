@@ -1,0 +1,25 @@
+{
+  "name": "Power Deficit Grid",
+  "description": "Total load exceeds maximum generation and battery capacity, resulting in unserved demand (blackout / deficit).",
+  "buses": [
+    {"name": "Bus1", "voltage": 11, "x": 0.0, "y": 1.0},
+    {"name": "Bus2", "voltage": 11, "x": 1.5, "y": 1.0},
+    {"name": "Bus3", "voltage": 11, "x": 0.75, "y": 0.0}
+  ],
+  "generators": [
+    {"name": "Rooftop_Solar", "bus": "Bus1", "capacity": 40, "marginal_cost": 0},
+    {"name": "Small_Diesel", "bus": "Bus3", "capacity": 30, "marginal_cost": 12}
+  ],
+  "loads": [
+    {"name": "Heavy_Factory", "bus": "Bus2", "demand": 80},
+    {"name": "Hospital", "bus": "Bus3", "demand": 40}
+  ],
+  "lines": [
+    {"name": "L1", "from_bus": "Bus1", "to_bus": "Bus2", "capacity": 100},
+    {"name": "L2", "from_bus": "Bus1", "to_bus": "Bus3", "capacity": 100},
+    {"name": "L3", "from_bus": "Bus2", "to_bus": "Bus3", "capacity": 100}
+  ],
+  "storage": [
+    {"name": "Backup_Battery", "bus": "Bus3", "capacity": 20, "max_power": 15, "initial_energy": 10}
+  ]
+}
